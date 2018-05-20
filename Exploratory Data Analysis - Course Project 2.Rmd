@@ -1,0 +1,125 @@
+---
+title: "Exploratory Data Analysis - Course Project 2"
+author: "Adrian R Angkawijaya"
+date: "5/20/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### *Description*
+This project is the Coursera Exploratory Data Analysis - Course Project 2. The overall goal of this project is to explore the National Emissions Inventory database and see what it says about fine particulate matter pollution in the United states over the 10-year period 1999–2008. 
+
+**Load and read data**
+```{r}
+if (!file.exists("Courseradata")) {
+    dir.create("Courseradata")
+}
+fileUrl <- "https://d396qusza40orc.cloudfront.net/exdata%2Fdata%2FNEI_data.zip"
+download.file(fileUrl, destfile = "/Users/adrianromano/Downloads/Courseradata/NEI_data.zip", method = "curl")
+if (!file.exists("/Users/adrianromano/Downloads/Courseradata/NEI_data")) {
+    unzip(zipfile = "/Users/adrianromano/Downloads/Courseradata/NEI_data.zip", 
+          exdir = "/Users/adrianromano/Downloads/Courseradata")
+}
+NEI <- readRDS("/Users/adrianromano/Downloads/Courseradata/NEI_data/summarySCC_PM25.rds")
+SCC <-readRDS("/Users/adrianromano/Downloads/Courseradata/NEI_data/Source_Classification_Code.rds")
+str(NEI)
+str(SCC)
+```
+
+**Have total emissions from PM2.5 decreased in the United States from 1999 to 2008?**
+```{r}
+library(dplyr)
+pm25TotalEmissions <- NEI %>%
+    group_by(year) %>%
+    summarize(Emissions = sum(Emissions))
+
+barplot(pm25TotalEmissions$Emissions, names.arg = pm25TotalEmissions$year,
+        xlab = "Years", ylab = expression("Total PM"[2.5]*" emissions"),
+        main = expression("Total PM"[2.5]*" emissions for the years"),
+        col = c("bisque", "pink", "aquamarine", "azure"))
+```
+
+**Have total emissions from PM2.5 decreased in the Baltimore City, Maryland (fips == "24510") from 1999 to 2008?**
+```{r}
+library(dplyr)
+baltimoreEmissions <- NEI %>%
+    filter(fips == "24510") %>%
+    group_by(year) %>%
+    summarize(Emissions = sum(Emissions))
+
+barplot(baltimoreEmissions$Emissions, names.arg = baltimoreEmissions$year,
+        xlab = "Years", ylab = expression("Total PM"[2.5]*" emissions"),
+        main = expression("Total PM"[2.5]*" emissions in Baltimore City, Maryland"),
+        col = c("bisque", "pink", "aquamarine", "azure"))
+```
+
+**Of the four types of sources indicated by the type (point, nonpoint, onroad, nonroad) variable, which of these four sources have seen decreases and increases in emissions from 1999–2008 for Baltimore City?**
+```{r}
+library(dplyr)
+baltimoreEmissions2 <- NEI %>%
+    filter(fips == "24510") %>%
+    group_by(year, type) %>%
+    summarize(Emissions = sum(Emissions))
+
+library(ggplot2)
+ggplot(baltimoreEmissions2, aes(x = factor(year), y = Emissions, fill = type)) +
+    geom_bar(stat = "identity", col = "black") +
+    facet_grid(. ~ type) +
+    xlab("Years") +
+    ylab(expression("Total PM"[2.5]*" emissions")) +
+    ggtitle (expression("PM"[2.5]*" emissions in Baltimore City, Maryland by Source Type"))
+```
+
+**Across the United States, how have emissions from coal combustion-related sources changed from 1999–2008?**
+```{r}
+NEISCC <- merge(NEI, SCC, by = "SCC")
+coal <- grepl("coal", NEISCC$Short.Name, ignore.case = TRUE)
+subsetCoal <- NEISCC[coal, ]
+
+library(dplyr)
+coalEmissions <- subsetCoal %>%
+    group_by(year) %>%
+    summarize(Emissions = sum(Emissions))
+
+ggplot(coalEmissions, aes(factor(year), Emissions)) +
+    geom_bar(stat = "identity", fill = c("magenta", "yellow", "orange", "linen"), col = "black") +
+    xlab("Years") +
+    ylab(expression("Total PM"[2.5]*" emissions")) +
+    ggtitle ("Emissions from coal combustion-related sources")
+```
+
+**How have emissions from motor vehicle sources changed from 1999–2008 in Baltimore City?**
+```{r}
+subsetMotor <- NEI[(NEI$fips == "24510") & (NEI$type == "ON-ROAD"), ]
+library(dplyr)
+baltimoreEmissions3 <- subsetMotor %>%
+    group_by(year) %>%
+    summarize(Emissions = sum(Emissions))
+
+ggplot(baltimoreEmissions3, aes(factor(year), Emissions)) +
+    geom_bar(stat = "identity", fill = c("bisque", "pink", "aquamarine", "azure"), color = "black") +
+    xlab("Years") +
+    ylab(expression("Total PM"[2.5]*" emissions")) +
+    ggtitle ("Total emissions from motor vehicle in Baltimore City, Maryland")
+```
+
+**Compare emissions from motor vehicle sources in Baltimore City with emissions from motor vehicle sources in Los Angeles County, California.**
+```{r}
+subsetMotor2 <- NEI[(NEI$fips == "24510" | NEI$fips == "06037") & (NEI$type == "ON-ROAD"), ]
+library(dplyr)
+baltimoreLAEmissions <- subsetMotor2 %>%
+    group_by(year, fips) %>%
+    summarize(Emissions = sum(Emissions))
+baltimoreLAEmissions$fips[baltimoreLAEmissions$fips == "24510"] <- "Baltimore City, MD"
+baltimoreLAEmissions$fips[baltimoreLAEmissions$fips == "06037"] <- "Los Angeles, CA"
+
+ggplot(baltimoreLAEmissions, aes(factor(year), Emissions, fill = fips)) + 
+    geom_bar(stat = "identity", color = "black") +
+    facet_grid(. ~ fips) +
+    xlab("Years") +
+    ylab(expression('Total PM'[2.5]*" emissions")) +
+    ggtitle("Total Emissions from motor vehicle in Baltimore City, MD vs Los Angeles, CA") 
+```
